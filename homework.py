@@ -1,9 +1,7 @@
-import datetime
 import logging
 import os
 import sys
 from http import HTTPStatus
-from logging.handlers import RotatingFileHandler
 
 import requests
 import time
@@ -14,15 +12,12 @@ import telegram
 from exceptions import BadStatusException, BadAPIAnswerError, NetworkError
 
 
-
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 handler = logging.StreamHandler(stream=sys.stdout)
-formatter = logging.Formatter(
-    '%(asctime)s [%(levelname)s] %(message)s'
-)
+formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
@@ -38,19 +33,21 @@ HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 HOMEWORK_VERDICTS = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
     'reviewing': 'Работа взята на проверку ревьюером.',
-    'rejected': 'Работа проверена: у ревьюера есть замечания.'
+    'rejected': 'Работа проверена: у ревьюера есть замечания.',
 }
 
 
 def check_tokens():
-    '''Проверить переменные окружения'''
+    """Проверить переменные окружения."""
     if not all([PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]):
-        logger.critical('Отсутствуют обязательные переменные окружения во время запуска бота')
+        logger.critical(
+            'Отсутствуют обязательные переменные окружения бота'
+        )
         exit()
 
 
 def send_message(bot, message):
-    '''Отправить сообщение в Телеграмм'''
+    """Отправить сообщение в Телеграмм."""
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
         logger.debug('Удачная отправка сообщения в Telegram')
@@ -59,10 +56,10 @@ def send_message(bot, message):
 
 
 def get_api_answer(timestamp):
-    '''Получить ответ от API Yandex'''
+    """Получить ответ от API Yandex."""
     payload = {'from_date': timestamp}
     try:
-        response = requests.get(ENDPOINT, headers= HEADERS, params=payload)
+        response = requests.get(ENDPOINT, headers=HEADERS, params=payload)
     except Exception as e:
         raise NetworkError(f'Проблема с получением ответа: {e}')
     if response.status_code != HTTPStatus.OK:
@@ -76,7 +73,7 @@ def get_api_answer(timestamp):
 
 
 def check_response(response):
-    '''Проверить ответ API на соответствие документации'''
+    """Проверить ответ API на соответствие документации."""
     if type(response) is not dict:
         raise TypeError(f'Ответ от сервера не словарь, а {type(response)}')
 
@@ -91,7 +88,7 @@ def check_response(response):
 
 
 def parse_status(homework):
-    '''Извлечь информацию о домашке'''
+    """Извлечь информацию о домашке."""
     if 'status' not in homework:
         raise BadAPIAnswerError('Нет ключа "status" в ответе')
 
@@ -137,5 +134,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-

@@ -1,16 +1,14 @@
+from dotenv import load_dotenv
+import json
+from http import HTTPStatus
 import logging
 import os
-import sys
-from http import HTTPStatus
-
 import requests
+import sys
 import time
-import json
-
-from dotenv import load_dotenv
 import telegram
-from exceptions import BadStatusException, BadAPIAnswerError, NetworkError
 
+from exceptions import BadStatusException, BadAPIAnswerError, NetworkError
 
 load_dotenv()
 
@@ -128,7 +126,6 @@ def main():
             message = f'Сбой в работе программы: {error}'
             logger.error(message)
             send_message(bot, message)
-
         time.sleep(RETRY_PERIOD)
 
 

@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 import json
-from http import HTTPStatus
+import http
 import logging
 import os
 import requests
@@ -8,7 +8,14 @@ import sys
 import time
 import telegram
 
-from exceptions import BadStatusException, BadAPIAnswerError, NetworkError
+from exceptions import (
+    BadStatusException,
+    BadAPIAnswerError,
+    NetworkError,
+    BadRequestsError,
+    ServerError,
+    UnauthorizedError,
+)
 
 load_dotenv()
 
@@ -22,6 +29,7 @@ logger.addHandler(handler)
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('CHAT_ID')
+TOKEN_NAMES = ['PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID']
 
 RETRY_PERIOD = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
@@ -37,11 +45,15 @@ HOMEWORK_VERDICTS = {
 
 def check_tokens():
     """Проверить переменные окружения."""
-    if not all([PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]):
-        logger.critical(
-            'Отсутствуют обязательные переменные окружения бота'
-        )
-        exit()
+    has_missing_tokens = False
+    for name in TOKEN_NAMES:
+        if not globals()[name]:
+            has_missing_tokens = True
+            logger.critical(
+                f'Отсутствует обязательная переменная окружения бота: {name}'
+            )
+    if has_missing_tokens:
+        sys.exit()
 
 
 def send_message(bot, message):
@@ -49,7 +61,7 @@ def send_message(bot, message):
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
         logger.debug('Удачная отправка сообщения в Telegram')
-    except Exception as e:
+    except telegram.TelegramError as e:
         logger.error(f'Сбой при отправке сообщения в Telegram: {e}')
 
 
@@ -58,10 +70,28 @@ def get_api_answer(timestamp):
     payload = {'from_date': timestamp}
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, params=payload)
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         raise NetworkError(f'Проблема с получением ответа: {e}')
-    if response.status_code != HTTPStatus.OK:
-        raise BadStatusException(f'Статус: {response.status_code}')
+    if response.status_code != http.HTTPStatus.OK:
+        if response.status_code == http.HTTPStatus.BAD_REQUEST:
+            raise BadRequestsError(
+                f'Некорретный запрос: {response.text}', response.status_code
+            )
+
+        elif response.status_code == http.HTTPStatus.INTERNAL_SERVER_ERROR:
+            raise ServerError(
+                f'Ошибка сервера {response.text}', response.status_code
+            )
+
+        elif response.status_code == http.HTTPStatus.UNAUTHORIZED:
+            raise UnauthorizedError(
+                f'Ошибка авторизации {response.text}', response.status_code
+            )
+
+        else:
+            raise BadStatusException(
+                f'Ошибка {response.text}', response.status_code
+            )
     try:
         api_answer = response.json()
     except json.JSONDecodeError as e:
@@ -126,7 +156,8 @@ def main():
             message = f'Сбой в работе программы: {error}'
             logger.error(message)
             send_message(bot, message)
-        time.sleep(RETRY_PERIOD)
+        finally:
+            time.sleep(RETRY_PERIOD)
 
 
 if __name__ == '__main__':

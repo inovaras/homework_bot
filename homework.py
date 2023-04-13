@@ -12,9 +12,7 @@ from exceptions import (
     BadStatusException,
     BadAPIAnswerError,
     NetworkError,
-    BadRequestsError,
-    ServerError,
-    UnauthorizedError,
+    ServerError
 )
 
 load_dotenv()
@@ -72,30 +70,20 @@ def get_api_answer(timestamp):
         response = requests.get(ENDPOINT, headers=HEADERS, params=payload)
     except requests.exceptions.RequestException as e:
         raise NetworkError(f'Проблема с получением ответа: {e}')
-    if response.status_code != http.HTTPStatus.OK:
-        if response.status_code == http.HTTPStatus.BAD_REQUEST:
-            raise BadRequestsError(
-                f'Некорретный запрос: {response.text}', response.status_code
-            )
-
-        elif response.status_code == http.HTTPStatus.INTERNAL_SERVER_ERROR:
-            raise ServerError(
-                f'Ошибка сервера {response.text}', response.status_code
-            )
-
-        elif response.status_code == http.HTTPStatus.UNAUTHORIZED:
-            raise UnauthorizedError(
-                f'Ошибка авторизации {response.text}', response.status_code
-            )
-
-        else:
-            raise BadStatusException(
-                f'Ошибка {response.text}', response.status_code
-            )
     try:
         api_answer = response.json()
     except json.JSONDecodeError as e:
         raise BadAPIAnswerError(f'Ошибка при конвертировании в json: {e}')
+    if response.status_code != http.HTTPStatus.OK:
+        if api_answer.keys() == {'error', 'code'}:
+            raise ServerError(
+                f'Ошибка {api_answer["error"]}, {api_answer["code"]}',
+                response.status_code
+            )
+        raise BadStatusException(
+            f'Ошибка {response.text}', response.status_code
+        )
+
     logger.debug('Получен ответ от сервера :)')
     return api_answer
 

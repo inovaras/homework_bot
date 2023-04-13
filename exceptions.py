@@ -24,7 +24,6 @@ class ServerError(BaseError):
     pass
 
 
-class UnauthorizedError(BaseError):
-    pass
+
 
 

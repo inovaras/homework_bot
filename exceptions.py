@@ -16,14 +16,9 @@ class NetworkError(Exception):
     pass
 
 
-class BadRequestsError(BaseError):
-    pass
-
-
 class ServerError(BaseError):
     pass
 
 
-
-
-
+class MissingTokensError(Exception):
+    pass

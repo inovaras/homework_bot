@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
-import json
 import http
+import json
 import logging
 import os
 import requests
@@ -11,6 +11,7 @@ import telegram
 from exceptions import (
     BadStatusException,
     BadAPIAnswerError,
+    MissingTokensError,
     NetworkError,
     ServerError
 )
@@ -41,20 +42,19 @@ HOMEWORK_VERDICTS = {
 }
 
 
-def check_tokens():
+def check_tokens() -> bool:
     """Проверить переменные окружения."""
-    has_missing_tokens = False
+    has_all_tokens = True
     for name in TOKEN_NAMES:
         if not globals()[name]:
-            has_missing_tokens = True
+            has_all_tokens = False
             logger.critical(
                 f'Отсутствует обязательная переменная окружения бота: {name}'
             )
-    if has_missing_tokens:
-        sys.exit()
+    return has_all_tokens
 
 
-def send_message(bot, message):
+def send_message(bot: telegram.Bot, message: str) -> None:
     """Отправить сообщение в Телеграмм."""
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
@@ -63,13 +63,14 @@ def send_message(bot, message):
         logger.error(f'Сбой при отправке сообщения в Telegram: {e}')
 
 
-def get_api_answer(timestamp):
+def get_api_answer(timestamp: int) -> json:
     """Получить ответ от API Yandex."""
     payload = {'from_date': timestamp}
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, params=payload)
     except requests.exceptions.RequestException as e:
-        raise NetworkError(f'Проблема с получением ответа: {e}')
+        if isinstance(e, requests.ConnectionError):
+            raise NetworkError(f'Проблема с получением ответа: {e}')
     try:
         api_answer = response.json()
     except json.JSONDecodeError as e:
@@ -88,7 +89,7 @@ def get_api_answer(timestamp):
     return api_answer
 
 
-def check_response(response):
+def check_response(response: requests.models.Response) -> None:
     """Проверить ответ API на соответствие документации."""
     if type(response) is not dict:
         raise TypeError(f'Ответ от сервера не словарь, а {type(response)}')
@@ -103,7 +104,7 @@ def check_response(response):
         raise TypeError("Тип значений по ключу 'homeworks' не список")
 
 
-def parse_status(homework):
+def parse_status(homework: dict) -> str:
     """Извлечь информацию о домашке."""
     if 'status' not in homework:
         raise BadAPIAnswerError('Нет ключа "status" в ответе')
@@ -122,9 +123,12 @@ def parse_status(homework):
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
-def main():
+def main() -> None:
     """Основная логика работы бота."""
-    check_tokens()
+    if check_tokens() is False:
+        raise MissingTokensError(
+            'Отсутствуют обязательные переменные окружения бота'
+        )
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
 
